@@ -1,25 +1,30 @@
 # AssetForge
 
-**Work in progress.** Shared art-pipeline tooling for MindAttic projects — background/whitespace cleanup
-and portrait crop framing today, mesh normalization planned. One engine, consumed by every project's own
-CLI wrapper instead of re-solved per repo.
+**Work in progress.** Shared art-pipeline tooling for MindAttic projects — background/whitespace cleanup,
+portrait crop framing, and mesh reparent/rescale/reyaw normalization. One engine, consumed by every
+project's own CLI wrapper instead of re-solved per repo.
 
 ## Packages
 
-- `MindAttic.AssetForge` — the library. Background cleanup (Color-to-Alpha un-mixing, border-vs-enclosed
-  blob erasure) and portrait crop framing (`face_crop`/`figure_crop` heuristics).
+- `MindAttic.AssetForge` — the library.
+  - Background cleanup (Color-to-Alpha un-mixing, border-vs-enclosed blob erasure).
+  - Portrait crop framing (`face_crop`/`figure_crop` heuristics).
+  - Mesh normalization (reparent/recenter, rescale to a target length, yaw) — generalizes
+    `UnitySolarSystem`'s `ShipModels.Normalise()` runtime fix-up into an offline step; imports anything
+    AssimpNet reads (fbx, obj, ...), exports binary glTF (`.glb`).
 - `MindAttic.AssetForge.Cli` (`assetforge`) — command-line wrapper over the library:
 
   ```
   assetforge clean <input.png> <output.png> [--fuzz 3] [--hole-area 2] [--mode Auto|BorderOnly|Skip] [--border-width 12] [--dilate 2]
   assetforge crop  <input.png> [--kind Face|Figure]
+  assetforge mesh normalize <input> <output.glb> [--yaw 0] [--target-length 1] [--no-recenter] [--no-scale]
   ```
 
 ## Status
 
-First consumer: GridGameGaiden's new-portrait import pipeline. Mesh support (normalize orientation/scale
-from known asset-pack conventions, reformat to glTF) is tracked but not yet built — see that project's
-`docs` for the originating plan.
+First consumer: GridGameGaiden's new-portrait import pipeline. Mesh normalization is built and tested
+(including against a real `UnitySolarSystem` ship FBX, read-only — nothing in that repo has been changed
+yet) but not yet wired into any game's actual loading code or asset set.
 
 ## Known limitation
 
