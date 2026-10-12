@@ -229,18 +229,18 @@ public class MeshNormalizerTests
             using (var exporter = new AssimpContext())
                 Assert.That(exporter.ExportFile(scene, inputPath, "obj"), Is.True);
 
-            // Exercises the real public entry point end to end -- import, normalize, export -- not just
-            // the internal scene-mutation logic, and specifically the "gltf2" (JSON+bin) export path:
-            // this Assimp build's binary "glb"/"glb2" exporters both silently write legacy glTF 1.0
-            // regardless of which is requested (see MeshNormalizer.Normalize's doc comment), which this
-            // round-trip would have caught too (a v1 file re-describes itself in a way Assimp's own
-            // importer sometimes crashes on for larger real-world meshes).
-            MeshNormalizer.Normalize(inputPath, outputPath, new MeshNormalizeOptions { TargetLengthUnits = 1f, Recenter = true });
-            Assert.That(File.Exists(outputPath), Is.True);
-            Assert.That(File.Exists(Path.ChangeExtension(outputPath, ".bin")), Is.True, "gltf2 export must produce its sibling .bin buffer file");
+            // Exercises the real public entry point end to end -- import, normalize, export, and the
+            // extension-reconciliation step -- not just the internal scene-mutation logic. This Assimp
+            // build's "gltf2" exporter doesn't reliably produce the form implied by the requested
+            // extension (sometimes JSON+.bin, sometimes a single binary blob regardless of what's asked
+            // for), and its "glb"/"glb2" IDs both silently write legacy glTF 1.0 instead of 2.0 (see
+            // MeshNormalizer.Normalize's doc comment) -- so the real output path must come from this
+            // method's return value, and must actually reimport, not just exist.
+            var actualOutputPath = MeshNormalizer.Normalize(inputPath, outputPath, new MeshNormalizeOptions { TargetLengthUnits = 1f, Recenter = true });
+            Assert.That(File.Exists(actualOutputPath), Is.True);
 
             using var importer = new AssimpContext();
-            var reimported = importer.ImportFile(outputPath, PostProcessSteps.Triangulate);
+            var reimported = importer.ImportFile(actualOutputPath, PostProcessSteps.Triangulate);
             var (min, max) = MeshNormalizer.ComputeWorldBounds(reimported);
             var size = max - min;
             var largest = Math.Max(size.X, Math.Max(size.Y, size.Z));

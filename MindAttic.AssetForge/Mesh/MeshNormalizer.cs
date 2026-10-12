@@ -46,22 +46,34 @@ public sealed record MeshNormalizeOptions
 public static class MeshNormalizer
 {
     /// <summary>Imports <paramref name="inputPath"/> (any format Assimp reads — fbx, obj, gltf, ...),
-    /// applies the normalize transform, and exports glTF 2.0 to <paramref name="outputPath"/> (expected to
-    /// end in <c>.gltf</c>) — JSON plus a sibling <c>.bin</c> buffer file next to it, both required. glTF
-    /// is the target format projects are standardizing on (open Khronos standard, strict PBR material
-    /// spec), vs. older per-pack formats (FBX, ...) with inconsistent material interpretation across
-    /// exporters.
+    /// applies the normalize transform, and exports glTF 2.0 under <paramref name="outputPath"/> (its
+    /// extension is advisory, not binding — see below). Returns the actual path written, which callers
+    /// must use instead of assuming <paramref name="outputPath"/> unchanged. glTF is the target format
+    /// projects are standardizing on (open Khronos standard, strict PBR material spec), vs. older
+    /// per-pack formats (FBX, ...) with inconsistent material interpretation across exporters.
     ///
-    /// Not a single-file binary <c>.glb</c>: this Assimp build's "glb"/"glb2" binary exporters both
-    /// silently write the legacy glTF <em>1.0</em> binary layout regardless of which format ID is
-    /// requested (confirmed by parsing a real exported file's 12-byte header — the version field reads
-    /// back as 1 either way — and reproduced crashing Assimp's own reimporter on one specific source
-    /// file). The plain JSON "gltf2" exporter is the one that actually produces spec-correct 2.0 content
-    /// (confirmed: its JSON declares <c>"asset":{"version":"2.0"}</c>, and it reimports cleanly on every
-    /// file that crashed via the binary path) — a real packaging bug in the native binary this NuGet
-    /// bundles, not a theoretical one. Unity's glTFast importer (and glTF tooling generally) reads the
-    /// JSON+bin form exactly the same as a single `.glb`, so this loses nothing for actual consumers.</summary>
-    public static void Normalize(string inputPath, string outputPath, MeshNormalizeOptions options)
+    /// Two real bugs/quirks in this Assimp build had to be worked around, both found by converting actual
+    /// production ship meshes, not synthetic test scenes:
+    /// <list type="bullet">
+    /// <item>The "glb"/"glb2" format IDs both silently write the legacy glTF <em>1.0</em> binary layout
+    /// regardless of which is requested (confirmed by parsing a real exported file's 12-byte header — the
+    /// version field reads back as 1 either way — and reproduced crashing Assimp's own reimporter,
+    /// 0xC0000005, on one specific source file). The "gltf2" format ID is the one that actually produces
+    /// spec-correct 2.0 content (confirmed: its JSON declares <c>"asset":{"version":"2.0"}</c>), so that's
+    /// what this always requests — regardless of what the output extension suggests.</item>
+    /// <item>"gltf2" itself doesn't consistently choose JSON+external-.bin vs. single-file binary based on
+    /// the requested extension — a trivial single-mesh scene came out as split JSON+.bin even when asked
+    /// for a <c>.gltf</c> path, but a real multi-mesh ship came out as a single binary blob (correct glTF 2
+    /// binary content, magic+version+JSON/BIN chunks all valid) even though it was ALSO asked for a
+    /// <c>.gltf</c> path — and Assimp's own importer picks its parser by extension, so a binary blob
+    /// sitting under a <c>.gltf</c> name fails to reimport. Rather than guess which form a given scene
+    /// will produce, this reads back the first bytes actually written and renames to <c>.glb</c> (binary
+    /// form; deletes a stray <c>.bin</c>/<c>.gltf</c> sibling if present) or leaves a <c>.gltf</c>+<c>.bin</c>
+    /// pair alone (JSON form), so the file on disk is always self-consistent with its own content,
+    /// whichever way the exporter decided to go.</item>
+    /// </list>
+    /// Unity's glTFast importer (and glTF tooling generally) reads both forms identically.</summary>
+    public static string Normalize(string inputPath, string outputPath, MeshNormalizeOptions options)
     {
         using var importer = new AssimpContext();
         var scene = importer.ImportFile(inputPath, PostProcessSteps.Triangulate | PostProcessSteps.JoinIdenticalVertices);
@@ -71,6 +83,37 @@ public static class MeshNormalizer
         using var exporter = new AssimpContext();
         if (!exporter.ExportFile(scene, outputPath, "gltf2"))
             throw new InvalidOperationException($"AssimpNet failed to export '{outputPath}'");
+
+        return ReconcileExtensionWithActualContent(outputPath);
+    }
+
+    /// <summary>Detects whether what got written to <paramref name="path"/> is binary glTF (starts with
+    /// the "glTF" magic) or plain JSON, and renames it to the matching extension (<c>.glb</c> or
+    /// <c>.gltf</c>) if it doesn't already have one — see <see cref="Normalize"/>'s doc comment for why
+    /// this is necessary rather than assumed. Returns the final path.</summary>
+    private static string ReconcileExtensionWithActualContent(string path)
+    {
+        Span<byte> magic = stackalloc byte[4];
+        using (var stream = File.OpenRead(path))
+        {
+            if (stream.Read(magic) != 4) return path;
+        }
+        var isBinary = magic is [(byte)'g', (byte)'l', (byte)'T', (byte)'F'];
+        var wantExtension = isBinary ? ".glb" : ".gltf";
+        if (string.Equals(Path.GetExtension(path), wantExtension, StringComparison.OrdinalIgnoreCase))
+            return path;
+
+        var correctedPath = Path.ChangeExtension(path, wantExtension);
+        File.Move(path, correctedPath, overwrite: true);
+
+        if (isBinary)
+        {
+            // A binary export carries everything in the one file; a stray .bin this same base name might
+            // already have from a previous JSON-form export would be stale leftovers, not part of this one.
+            var staleBin = Path.ChangeExtension(path, ".bin");
+            if (File.Exists(staleBin)) File.Delete(staleBin);
+        }
+        return correctedPath;
     }
 
     /// <summary>Applies the normalize transform, baked directly into every mesh's vertex data (not left

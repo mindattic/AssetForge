@@ -35,8 +35,8 @@ static void PrintUsage()
         usage:
           assetforge clean <input.png> <output.png> [--fuzz 3] [--hole-area 2] [--mode Auto|BorderOnly|Skip] [--border-width 12] [--dilate 2]
           assetforge crop  <input.png> [--kind Face|Figure]
-          assetforge mesh normalize <input> <output.gltf> [--yaw 0] [--target-length 1] [--axis LargestDimension|X|Y|Z] [--no-recenter] [--no-scale]
-            (writes <output.gltf> plus a sibling <output>.bin -- see MeshNormalizer.Normalize's doc comment for why not a single .glb)
+          assetforge mesh normalize <input> <output> [--yaw 0] [--target-length 1] [--axis LargestDimension|X|Y|Z] [--no-recenter] [--no-scale]
+            (the printed outputPath is the real one -- its extension may differ from what you passed; see MeshNormalizer.Normalize's doc comment)
         """);
 }
 
@@ -99,8 +99,8 @@ static int RunMesh(string[] rest)
         Recenter = Array.IndexOf(flags, "--no-recenter") < 0,
     };
 
-    MeshNormalizer.Normalize(inputPath, outputPath, options);
-    Console.WriteLine(JsonSerializer.Serialize(new { normalized = true, outputPath }));
+    var actualOutputPath = MeshNormalizer.Normalize(inputPath, outputPath, options);
+    Console.WriteLine(JsonSerializer.Serialize(new { normalized = true, outputPath = actualOutputPath }));
     return 0;
 }
 
