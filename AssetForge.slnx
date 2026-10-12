@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="MindAttic.AssetForge.Cli/MindAttic.AssetForge.Cli.csproj" />
+  <Project Path="MindAttic.AssetForge.Tests/MindAttic.AssetForge.Tests.csproj" />
+  <Project Path="MindAttic.AssetForge/MindAttic.AssetForge.csproj" />
+</Solution>
