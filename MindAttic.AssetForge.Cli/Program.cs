@@ -1,6 +1,7 @@
 using System.Text.Json;
 using MindAttic.AssetForge.Background;
 using MindAttic.AssetForge.Crop;
+using MindAttic.AssetForge.Mesh;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 
@@ -16,6 +17,7 @@ try
     {
         case "clean": return RunClean(args[1..]);
         case "crop": return RunCrop(args[1..]);
+        case "mesh": return RunMesh(args[1..]);
         default:
             PrintUsage();
             return 1;
@@ -33,6 +35,7 @@ static void PrintUsage()
         usage:
           assetforge clean <input.png> <output.png> [--fuzz 3] [--hole-area 2] [--mode Auto|BorderOnly|Skip] [--border-width 12] [--dilate 2]
           assetforge crop  <input.png> [--kind Face|Figure]
+          assetforge mesh normalize <input> <output.glb> [--yaw 0] [--target-length 1] [--no-recenter]
         """);
 }
 
@@ -71,6 +74,31 @@ static int RunClean(string[] rest)
         trimmedWidth = result.TrimmedSize.Width,
         trimmedHeight = result.TrimmedSize.Height,
     }));
+    return 0;
+}
+
+static int RunMesh(string[] rest)
+{
+    if (rest.Length < 1 || rest[0] != "normalize" || rest.Length < 3)
+    {
+        PrintUsage();
+        return 1;
+    }
+    var inputPath = rest[1];
+    var outputPath = rest[2];
+    var flags = rest[3..];
+
+    var options = new MeshNormalizeOptions
+    {
+        YawDegrees = float.Parse(OptionalArg(flags, "--yaw") ?? "0"),
+        TargetLengthUnits = Array.IndexOf(flags, "--no-scale") >= 0
+            ? null
+            : float.Parse(OptionalArg(flags, "--target-length") ?? "1"),
+        Recenter = Array.IndexOf(flags, "--no-recenter") < 0,
+    };
+
+    MeshNormalizer.Normalize(inputPath, outputPath, options);
+    Console.WriteLine(JsonSerializer.Serialize(new { normalized = true, outputPath }));
     return 0;
 }
 
