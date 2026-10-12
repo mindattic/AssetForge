@@ -56,7 +56,7 @@ public static class BackgroundCleaner
 {
     public static BackgroundCleanResult Clean(Image<Rgba32> source, BackgroundCleanOptions options)
     {
-        var originalSize = source.Size;
+        var originalSize = source.Size();
 
         if (options.Mode == BackgroundMode.Skip)
             return new BackgroundCleanResult(source.Clone(), false, originalSize, originalSize);
@@ -64,7 +64,7 @@ public static class BackgroundCleaner
         if (HasExistingAlpha(source))
         {
             var trimmedOnly = TrimToAlphaBounds(source.Clone());
-            return new BackgroundCleanResult(trimmedOnly, false, originalSize, trimmedOnly.Size);
+            return new BackgroundCleanResult(trimmedOnly, false, originalSize, trimmedOnly.Size());
         }
 
         var width = source.Width;
@@ -127,7 +127,7 @@ public static class BackgroundCleaner
         });
 
         var trimmed = TrimToAlphaBounds(result);
-        return new BackgroundCleanResult(trimmed, anyEligible, originalSize, trimmed.Size);
+        return new BackgroundCleanResult(trimmed, anyEligible, originalSize, trimmed.Size());
     }
 
     public static Rgba32 SampleBackgroundColor(Image<Rgba32> image, int borderWidth)

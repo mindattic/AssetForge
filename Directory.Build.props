@@ -8,5 +8,12 @@
     <Company>MindAttic</Company>
     <Authors>MindAttic</Authors>
     <Copyright>Copyright (c) 2026 MindAttic</Copyright>
+    <!-- SixLabors.ImageSharp 2.1.13 is the last Apache-2.0 release (3.x+ requires a commercial license
+         for Release builds); its known advisories (NU1902/NU1903) are decompression-bomb/DoS-class
+         issues in untrusted-input scenarios. This tool only ever processes art the project owner
+         generated themselves (never adversarial/network input), so the risk is accepted rather than
+         paying for a license or re-porting to another imaging library. Revisit if that input model
+         ever changes (e.g. this library gets exposed to uploads from someone other than the owner). -->
+    <NoWarn>$(NoWarn);NU1902;NU1903</NoWarn>
   </PropertyGroup>
 </Project>
