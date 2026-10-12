@@ -229,19 +229,32 @@ public class MeshNormalizerTests
             using (var exporter = new AssimpContext())
                 Assert.That(exporter.ExportFile(scene, inputPath, "obj"), Is.True);
 
-            // Exercises the real public entry point end to end -- import, normalize, export, and the
-            // extension-reconciliation step -- not just the internal scene-mutation logic. This Assimp
-            // build's "gltf2" exporter doesn't reliably produce the form implied by the requested
-            // extension (sometimes JSON+.bin, sometimes a single binary blob regardless of what's asked
-            // for), and its "glb"/"glb2" IDs both silently write legacy glTF 1.0 instead of 2.0 (see
-            // MeshNormalizer.Normalize's doc comment) -- so the real output path must come from this
-            // method's return value, and must actually reimport, not just exist.
+            // Exercises the real public entry point end to end -- import, normalize, and export via
+            // AssimpGltfWriter -- not just the internal scene-mutation logic.
             var actualOutputPath = MeshNormalizer.Normalize(inputPath, outputPath, new MeshNormalizeOptions { TargetLengthUnits = 1f, Recenter = true });
             Assert.That(File.Exists(actualOutputPath), Is.True);
 
-            using var importer = new AssimpContext();
-            var reimported = importer.ImportFile(actualOutputPath, PostProcessSteps.Triangulate);
-            var (min, max) = MeshNormalizer.ComputeWorldBounds(reimported);
+            // Regression test for a real bug: AssimpNet's own "gltf2" exporter (previously used here)
+            // writes structurally invalid accessor data -- SharpGLTF's strict loader rejected it as
+            // malformed on real production meshes with no textures, animations or skins at all (ships,
+            // weapon props), yet AssimpNet's OWN reimporter happily read it back regardless, which is
+            // exactly why re-importing via AssimpNet (as this test originally did) never caught it. Load
+            // via SharpGLTF specifically, the strict reader that actually caught the real bug, not Assimp's
+            // lenient one.
+            var model = SharpGLTF.Schema2.ModelRoot.Load(actualOutputPath);
+            System.Numerics.Vector3 min = new(float.MaxValue), max = new(float.MinValue);
+            foreach (var node in model.DefaultScene.VisualChildren)
+            {
+                if (node.Mesh is null) continue;
+                var world = node.WorldMatrix;
+                foreach (var prim in node.Mesh.Primitives)
+                    foreach (var p in prim.GetVertexAccessor("POSITION").AsVector3Array())
+                    {
+                        var wp = System.Numerics.Vector3.Transform(p, world);
+                        min = System.Numerics.Vector3.Min(min, wp);
+                        max = System.Numerics.Vector3.Max(max, wp);
+                    }
+            }
             var size = max - min;
             var largest = Math.Max(size.X, Math.Max(size.Y, size.Z));
             Assert.That(largest, Is.EqualTo(1f).Within(1e-3));
