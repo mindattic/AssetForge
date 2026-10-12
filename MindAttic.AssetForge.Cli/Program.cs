@@ -35,7 +35,8 @@ static void PrintUsage()
         usage:
           assetforge clean <input.png> <output.png> [--fuzz 3] [--hole-area 2] [--mode Auto|BorderOnly|Skip] [--border-width 12] [--dilate 2]
           assetforge crop  <input.png> [--kind Face|Figure]
-          assetforge mesh normalize <input> <output.glb> [--yaw 0] [--target-length 1] [--axis LargestDimension|X|Y|Z] [--no-recenter] [--no-scale]
+          assetforge mesh normalize <input> <output.gltf> [--yaw 0] [--target-length 1] [--axis LargestDimension|X|Y|Z] [--no-recenter] [--no-scale]
+            (writes <output.gltf> plus a sibling <output>.bin -- see MeshNormalizer.Normalize's doc comment for why not a single .glb)
         """);
 }
 

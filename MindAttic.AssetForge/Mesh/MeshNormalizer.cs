@@ -46,10 +46,21 @@ public sealed record MeshNormalizeOptions
 public static class MeshNormalizer
 {
     /// <summary>Imports <paramref name="inputPath"/> (any format Assimp reads — fbx, obj, gltf, ...),
-    /// applies the normalize transform, and exports a binary glTF (.glb) to <paramref name="outputPath"/>.
-    /// glTF is the target format projects are standardizing on (open Khronos standard, strict PBR
-    /// material spec), vs. older per-pack formats (FBX, ...) with inconsistent material interpretation
-    /// across exporters.</summary>
+    /// applies the normalize transform, and exports glTF 2.0 to <paramref name="outputPath"/> (expected to
+    /// end in <c>.gltf</c>) — JSON plus a sibling <c>.bin</c> buffer file next to it, both required. glTF
+    /// is the target format projects are standardizing on (open Khronos standard, strict PBR material
+    /// spec), vs. older per-pack formats (FBX, ...) with inconsistent material interpretation across
+    /// exporters.
+    ///
+    /// Not a single-file binary <c>.glb</c>: this Assimp build's "glb"/"glb2" binary exporters both
+    /// silently write the legacy glTF <em>1.0</em> binary layout regardless of which format ID is
+    /// requested (confirmed by parsing a real exported file's 12-byte header — the version field reads
+    /// back as 1 either way — and reproduced crashing Assimp's own reimporter on one specific source
+    /// file). The plain JSON "gltf2" exporter is the one that actually produces spec-correct 2.0 content
+    /// (confirmed: its JSON declares <c>"asset":{"version":"2.0"}</c>, and it reimports cleanly on every
+    /// file that crashed via the binary path) — a real packaging bug in the native binary this NuGet
+    /// bundles, not a theoretical one. Unity's glTFast importer (and glTF tooling generally) reads the
+    /// JSON+bin form exactly the same as a single `.glb`, so this loses nothing for actual consumers.</summary>
     public static void Normalize(string inputPath, string outputPath, MeshNormalizeOptions options)
     {
         using var importer = new AssimpContext();
@@ -58,7 +69,7 @@ public static class MeshNormalizer
         NormalizeScene(scene, options);
 
         using var exporter = new AssimpContext();
-        if (!exporter.ExportFile(scene, outputPath, "glb"))
+        if (!exporter.ExportFile(scene, outputPath, "gltf2"))
             throw new InvalidOperationException($"AssimpNet failed to export '{outputPath}'");
     }
 
