@@ -72,9 +72,19 @@ public static class MeshNormalizer
     /// pair alone (JSON form), so the file on disk is always self-consistent with its own content,
     /// whichever way the exporter decided to go.</item>
     /// </list>
-    /// Unity's glTFast importer (and glTF tooling generally) reads both forms identically.</summary>
+    /// Unity's glTFast importer (and glTF tooling generally) reads both forms identically.
+    ///
+    /// When <paramref name="inputPath"/> is already glTF (.gltf/.glb), this instead delegates to
+    /// <see cref="GltfMeshNormalizer"/>, which reads and writes glTF natively via SharpGLTF rather than
+    /// round-tripping through AssimpNet's generic scene graph. Necessary, not just tidier: AssimpNet's
+    /// import/export round-trip corrupts animation data on skinned/rigged meshes (confirmed converting
+    /// UnityEve's creature models — 5 real animation clips became 195 after a round-trip, most likely one
+    /// spurious clip per bone-channel; SharpGLTF round-trips the same file's animations exactly).</summary>
     public static string Normalize(string inputPath, string outputPath, MeshNormalizeOptions options)
     {
+        if (GltfMeshNormalizer.IsGltfPath(inputPath))
+            return GltfMeshNormalizer.Normalize(inputPath, outputPath, options);
+
         using var importer = new AssimpContext();
         var scene = importer.ImportFile(inputPath, PostProcessSteps.Triangulate | PostProcessSteps.JoinIdenticalVertices);
 

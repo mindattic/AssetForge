@@ -15,6 +15,7 @@
   <ItemGroup>
     <PackageReference Include="SixLabors.ImageSharp" Version="2.1.13" />
     <PackageReference Include="AssimpNet" Version="5.0.0-beta1" />
+    <PackageReference Include="SharpGLTF.Toolkit" Version="1.0.7" />
   </ItemGroup>
 
   <ItemGroup>
