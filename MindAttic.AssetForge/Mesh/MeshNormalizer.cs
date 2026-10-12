@@ -9,6 +9,17 @@ namespace MindAttic.AssetForge.Mesh;
 /// project should have to re-derive and bake that fix-up into its own loading code, nor pay its cost every
 /// time the game boots.
 /// </summary>
+/// <summary>Which bounding-box extent <see cref="MeshNormalizeOptions.TargetLengthUnits"/> is measured
+/// against.</summary>
+public enum NormalizeAxis
+{
+    /// <summary>Whichever of X/Y/Z is largest.</summary>
+    LargestDimension,
+    X,
+    Y,
+    Z,
+}
+
 public sealed record MeshNormalizeOptions
 {
     /// <summary>Degrees to rotate around the vertical (Y) axis — the fixed per-pack constant an asset
@@ -16,10 +27,16 @@ public sealed record MeshNormalizeOptions
     /// need 180°).</summary>
     public float YawDegrees { get; init; } = 0f;
 
-    /// <summary>If set, the model is uniformly rescaled so its largest bounding-box dimension equals this
-    /// many units — e.g. 1.0 for "every hull is exactly 1 unit long," <c>ShipModels.cs</c>'s own
-    /// convention. Null leaves scale untouched.</summary>
+    /// <summary>If set, the model is uniformly rescaled so the <see cref="Axis"/> extent equals this many
+    /// units — e.g. 1.0 for "every hull is exactly 1 unit long," <c>ShipModels.cs</c>'s own convention.
+    /// Null leaves scale untouched.</summary>
     public float? TargetLengthUnits { get; init; } = 1f;
+
+    /// <summary>Which extent <see cref="TargetLengthUnits"/> measures against. Default
+    /// <see cref="NormalizeAxis.LargestDimension"/>; use <see cref="NormalizeAxis.Z"/> to match
+    /// <c>ShipModels.cs</c>'s exact convention (hull length along Z specifically, not just whichever axis
+    /// happens to be biggest).</summary>
+    public NormalizeAxis Axis { get; init; } = NormalizeAxis.LargestDimension;
 
     /// <summary>Recenters the model's bounding-box center onto the origin (zeroes the pack's own layout
     /// offset) before scaling/rotating.</summary>
@@ -58,11 +75,17 @@ public static class MeshNormalizer
         var (min, max) = ComputeWorldBounds(scene);
         var center = (min + max) * 0.5f;
         var size = max - min;
-        var maxDimension = Math.Max(size.X, Math.Max(size.Y, size.Z));
+        var measuredDimension = options.Axis switch
+        {
+            NormalizeAxis.X => size.X,
+            NormalizeAxis.Y => size.Y,
+            NormalizeAxis.Z => size.Z,
+            _ => Math.Max(size.X, Math.Max(size.Y, size.Z)),
+        };
 
         var translate = options.Recenter ? Matrix4x4.FromTranslation(-center) : Matrix4x4.Identity;
-        var scale = (options.TargetLengthUnits is { } target && maxDimension > 1e-6f)
-            ? Matrix4x4.FromScaling(new Vector3D(target / maxDimension, target / maxDimension, target / maxDimension))
+        var scale = (options.TargetLengthUnits is { } target && measuredDimension > 1e-6f)
+            ? Matrix4x4.FromScaling(new Vector3D(target / measuredDimension, target / measuredDimension, target / measuredDimension))
             : Matrix4x4.Identity;
         var rotate = Math.Abs(options.YawDegrees) > 1e-6f
             ? Matrix4x4.FromRotationY(options.YawDegrees * (float)(Math.PI / 180.0))

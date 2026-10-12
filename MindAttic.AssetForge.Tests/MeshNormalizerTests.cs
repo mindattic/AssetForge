@@ -126,6 +126,46 @@ public class MeshNormalizerTests
         Assert.That(size.X, Is.EqualTo(2f).Within(1e-2), "the original 2-unit Z extent should now read as X");
     }
 
+    // ShipModels.cs scales by bounds.size.z specifically, not "whichever axis is largest" -- for an
+    // elongated ship those usually coincide, but a faithful drop-in has to support the exact convention,
+    // not just the common case. Build a box whose longest axis is X (6 units) but Z is only 3, and confirm
+    // NormalizeAxis.Z scales by the 3-unit Z extent alone, ignoring the larger X extent.
+    [Test]
+    public void NormalizeScene_AxisZ_ScalesByZExtentEvenWhenNotTheLargestDimension()
+    {
+        var scene = new Scene { RootNode = new Node("root") };
+        var mesh = new Assimp.Mesh("hull", PrimitiveType.Triangle);
+        Vector3D[] corners =
+        {
+            new(-3, -1, -1.5f), new(3, -1, -1.5f), new(3, 1, -1.5f), new(-3, 1, -1.5f),
+            new(-3, -1, 1.5f), new(3, -1, 1.5f), new(3, 1, 1.5f), new(-3, 1, 1.5f),
+        };
+        foreach (var c in corners) mesh.Vertices.Add(c);
+        int[][] faces =
+        {
+            new[] { 0, 1, 2 }, new[] { 0, 2, 3 }, new[] { 4, 5, 6 }, new[] { 4, 6, 7 },
+            new[] { 0, 1, 5 }, new[] { 0, 5, 4 }, new[] { 2, 3, 7 }, new[] { 2, 7, 6 },
+            new[] { 1, 2, 6 }, new[] { 1, 6, 5 }, new[] { 0, 3, 7 }, new[] { 0, 7, 4 },
+        };
+        foreach (var f in faces) mesh.Faces.Add(new Face(f));
+        mesh.MaterialIndex = 0;
+        scene.Meshes.Add(mesh);
+        scene.RootNode.MeshIndices.Add(0);
+        scene.Materials.Add(new Material { Name = "default" });
+
+        MeshNormalizer.NormalizeScene(scene, new MeshNormalizeOptions
+        {
+            TargetLengthUnits = 1f,
+            Axis = NormalizeAxis.Z,
+            Recenter = false,
+        });
+
+        var (min, max) = MeshNormalizer.ComputeWorldBounds(scene);
+        var size = max - min;
+        Assert.That(size.Z, Is.EqualTo(1f).Within(1e-3), "Z extent (3 units) should become exactly 1");
+        Assert.That(size.X, Is.EqualTo(2f).Within(1e-3), "X extent (6 units) scales by the same factor, landing at 2 -- still the larger axis, which is correct: Axis.Z means scale IS measured by Z, not clamped to make Z the largest");
+    }
+
     // Regression test for a real bug: AssimpNet's Matrix4x4*Matrix4x4 composes leftmost-applied-first
     // ((A*B)*v == B*(A*v)), the opposite of the usual column-vector convention. A flat, single-level scene
     // (root node directly holding the mesh, parentWorld always Identity) can never expose an order bug in
